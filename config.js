@@ -3,7 +3,7 @@
 window.DASHBOARD_CONFIG = {
   clientName: "Design2Golf",
   platforms: [
-    { id: "instagram", name: "Instagram" },
+    { id: "instagram", name: "Instagram (Matt)" },
     { id: "linkedin", name: "LinkedIn (business)" },
     { id: "linkedin-personal", name: "LinkedIn (Matt)" },
     { id: "youtube", name: "YouTube" }

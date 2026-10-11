@@ -1,6 +1,6 @@
 # Design2Golf social dashboard
 
-A web page that turns the export files from Instagram, LinkedIn (business page and Matt's personal profile) and YouTube into one dashboard. There are no logins, connectors or tokens to expire. The files you upload are the data.
+A web page that turns the export files from Matt's Instagram (@mattatkins_d2g), LinkedIn (Design2Golf business page and Matt's personal profile) and YouTube into one dashboard. There are no logins, connectors or tokens to expire. The files you upload are the data.
 
 Live dashboard: **https://dkcpr.github.io/design2golf-dashboard/**
 
@@ -12,7 +12,7 @@ Pick the longest date range each time. Overlapping dates are fine.
 
 | Platform | Where | Files |
 |---|---|---|
-| **Instagram** | business.facebook.com/latest/insights/results → platform box: **Instagram** → date: **Last 90 days** → **Export → CSV** on each card | Views, Viewers, Follows, Visits, Interactions, Link clicks (6 CSVs) |
+| **Instagram (Matt)** | business.facebook.com/latest/insights/results → platform box: **@mattatkins_d2g** → date: **Last 90 days** → **Export → CSV** on each card | Views, Viewers, Follows, Visits, Interactions, Link clicks (6 CSVs) |
 | **LinkedIn (business)** | Design2Golf company page, admin view → **Analytics → Content → Export**, then **Analytics → Followers → Export** | `…_content_….xls` and `…_followers_….xls` |
 | **LinkedIn (Matt)** | Signed in as Matt: **linkedin.com/analytics/creator/content** → longest range → **Export** | One Excel file (it has Engagement, Followers and Top posts sheets) |
 | **YouTube** | **studio.youtube.com → Analytics → Advanced mode** → longest range → metrics: Views, Subscribers, Likes, Comments, Shares → **Export current view → Comma-separated values (.csv)** | A zip. Open it and upload `Chart data.csv` and `Table data.csv` |
