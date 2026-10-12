@@ -15,7 +15,7 @@ Pick the longest date range each time. Overlapping dates are fine.
 | **Instagram (Matt)** | business.facebook.com/latest/insights/results → platform box: **@mattatkins_d2g** → date: **Last 90 days** → **Export → CSV** on each card | Views, Viewers, Follows, Visits, Interactions, Link clicks (6 CSVs) |
 | **LinkedIn (business)** | Design2Golf company page, admin view → **Analytics → Content → Export**, then **Analytics → Followers → Export** | `…_content_….xls` and `…_followers_….xls` |
 | **LinkedIn (Matt)** | Signed in as Matt: **linkedin.com/analytics/creator/content** → longest range → **Export** | One Excel file (it has Engagement, Followers and Top posts sheets) |
-| **YouTube** | **studio.youtube.com → Analytics → Advanced mode** → longest range → metrics: Views, Subscribers, Likes, Comments, Shares → **Export current view → Comma-separated values (.csv)** | A zip. Open it and upload `Chart data.csv` and `Table data.csv` |
+| **YouTube** | **studio.youtube.com → Analytics → Overview → See more** (opens Advanced mode) → longest range → **download arrow (↓) → Comma-separated values (.csv)** | A folder of three files. Upload `Totals.csv` (daily views for the whole channel) and `Table data.csv` (one row per video). Skip `Chart data.csv`: it only covers the videos highlighted in the chart. |
 
 Only someone signed in as Matt can export his personal LinkedIn analytics. If that isn't you, ask him to send you the file each week.
 
