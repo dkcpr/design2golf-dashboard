@@ -441,7 +441,13 @@
 
   function allWeeks(W) {
     var set = {};
-    Object.keys(W).forEach(function (p) { Object.keys(W[p]).forEach(function (w) { set[w] = true; }); });
+    // Only weeks with real numbers count: a week that just has an old post in it (Matt's LinkedIn export
+    // lists a 2012 post) must not stretch the timeline back years.
+    Object.keys(W).forEach(function (p) {
+      Object.keys(W[p]).forEach(function (w) {
+        if (Object.keys(W[p][w]).some(function (k) { return k !== "posts" && k !== "followersDate" && W[p][w][k] != null; })) set[w] = true;
+      });
+    });
     var ws = Object.keys(set).sort();
     if (!ws.length) return [];
     var out = [], w = ws[0], last = ws[ws.length - 1];
