@@ -49,6 +49,24 @@ week_start,platform,followers,new_followers,reach,impressions,engagements,posts
 
 `week_start` is that week's Monday. `platform` is `instagram`, `linkedin`, `linkedin-personal` or `youtube`. Leave blanks for anything you don't have. Numbers in this file take priority over the exports.
 
+## Goals
+
+Targets live in `data/manual/goals.csv`, one row per goal. To add or change goals, open the file in GitHub and click the pencil icon:
+
+```
+start,end,platform,metric,target,label
+2026-10-01,2026-12-31,all,new_followers,300,
+2026-10-01,2026-12-31,instagram,engagements,1500,
+2026-10-01,2026-12-31,linkedin-personal,followers,800,Matt's LinkedIn to 800 followers
+2026-10-01,2026-12-31,all,engagement_rate,5%,
+```
+
+- `platform`: `all`, `instagram`, `linkedin`, `linkedin-personal` or `youtube`
+- `metric`: `new_followers`, `followers` (a total to reach), `reach`, `views`, `engagements`, `engagement_rate` (write it as `5%`) or `posts`
+- `label`: optional; the name shown on the dashboard
+
+Each goal shows progress against its target, with a marker for where you should be by now if you keep a steady pace. **On track** means at or ahead of pace, **Close** means within 20% of it, and **Behind** means further back. Pace is measured up to the newest data uploaded, so upload the week's exports before reading it.
+
 ## How the numbers are calculated
 
 - Weeks run Monday to Sunday.

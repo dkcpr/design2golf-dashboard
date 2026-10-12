@@ -74,6 +74,20 @@ h2 { font-size: 15px; margin: 0 0 12px; }
 .kpi .label { color: var(--ink-2); font-size: 12px; }
 .kpi .value { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; margin: 2px 0; }
 .kpi .delta { font-size: 12px; color: var(--muted); }
+
+.goals { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px 24px; }
+.goal .gtop { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.goal .gname { font-weight: 600; }
+.goal .gstat { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.goal .gstat b { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; background: var(--sc); color: #fff; font-size: 10px; }
+.goal .gnum { margin: 6px 0; color: var(--ink-2); }
+.goal .gnum b { color: var(--ink); font-size: 20px; font-weight: 650; }
+.goal .gpct { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.goal .gbar { position: relative; height: 8px; border-radius: 4px; background: var(--grid); }
+.goal .gbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+.goal .gbar i.mark { width: 2px; background: var(--ink) !important; top: -3px; bottom: -3px; border-radius: 1px; }
+.goal .gmeta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+#goals section { margin-bottom: 16px; }
 .delta.up { color: var(--up); } .delta.down { color: var(--down); }
 
 .chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -151,6 +165,7 @@ dialog .controls { margin-top: 12px; }
   <div class="fresh" id="fresh"></div>
   <div id="warnings"></div>
   <div class="kpis" id="kpis"></div>
+  <div id="goals"></div>
 
   <section class="card">
     <div class="chart-head">

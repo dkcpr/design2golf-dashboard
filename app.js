@@ -35,6 +35,7 @@
     daily: {},      // "platform|YYYY-MM-DD|metric" -> number
     posts: {},      // dedupe key -> post
     manual: {},     // "platform|weekStart|metric" -> number
+    goals: [],      // { start, end, platform, metric, target, label } from data/manual/goals.csv
     files: [],      // { path, platform, ok, note }
     previewCount: 0,
     weeksBack: 12,
@@ -273,6 +274,30 @@
     return { daily: count + extra, posts: 0 };
   }
 
+  // goals.csv: start,end,platform,metric,target,label — platform is a platform id or "all".
+  var GOAL_METRICS = {
+    "new followers": "newFollowers", "followers": "followers", "reach": "reach", "views": "impressions",
+    "impressions": "impressions", "engagements": "engagements", "engagement rate": "engRate", "posts": "posts"
+  };
+  function parseGoals(rows, sink) {
+    var h = (rows[0] || []).map(norm);
+    var col = function (n) { return h.indexOf(n); };
+    var n = 0;
+    for (var r = 1; r < rows.length; r++) {
+      var row = rows[r] || [];
+      var start = parseDate(row[col("start")]), end = parseDate(row[col("end")]);
+      var metric = GOAL_METRICS[norm(row[col("metric")]).replace(/_/g, " ")];
+      var platform = norm(row[col("platform")]) || "all";
+      var raw = String(row[col("target")] == null ? "" : row[col("target")]).trim();
+      var target = parseNum(raw.replace(/%$/, ""));
+      if (!start || !end || !metric || target == null || (platform !== "all" && !PNAME[platform])) continue;
+      if (metric === "engRate" && (/%$/.test(raw) || target > 1)) target = target / 100; // "5%" or 5 → 0.05
+      sink.goals.push({ start: start, end: end, platform: platform, metric: metric, target: target, label: String(row[col("label")] || "").trim() });
+      n++;
+    }
+    return n;
+  }
+
   function parseManual(rows, sink) {
     var headers = (rows[0] || []).map(norm);
     var wi = headers.indexOf("week start"), pi = headers.indexOf("platform");
@@ -308,7 +333,7 @@
     var total = { daily: 0, posts: 0, manual: 0 };
     wb.SheetNames.forEach(function (sn) {
       var rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null, blankrows: false });
-      if (platform === "manual") { total.manual += parseManual(rows, state); return; }
+      if (platform === "manual") { total.manual += /goal/i.test(name) ? parseGoals(rows, state) : parseManual(rows, state); return; }
       var r = parseTable(rows, name + " " + sn, platform, state);
       total.daily += r.daily; total.posts += r.posts;
     });
@@ -497,6 +522,7 @@
     renderFresh(W);
     renderWarnings();
     renderKpis(W, cur, prev);
+    renderGoals(W);
     renderMain(W, cur);
     renderPlatforms(W, cur, prev);
     renderPosts(cur);
@@ -563,6 +589,89 @@
     $("kpis").innerHTML = tiles.map(function (t) {
       return '<div class="card kpi"><div class="label">' + t.label + '</div><div class="value">' + t.f(t.v) + "</div>" + (t.note ? '<div class="delta">' + esc(t.note) + "</div>" : deltaHTML(t.v, t.p, t.rate)) + "</div>";
     }).join("");
+  }
+
+  // ---------- goals ----------
+  // Sum (or, for followers, the latest value) of one platform's daily numbers between two dates.
+  // Engagements fall back to likes + comments + shares + saves when no total was exported. null = no daily data.
+  function dayValue(p, m, start, end) {
+    var sums = {}, lastF = null, lastD = null, any = false;
+    Object.keys(state.daily).forEach(function (k) {
+      var parts = k.split("|");
+      if (parts[0] !== p || parts[1] < start || parts[1] > end) return;
+      if (parts[2] === "followers") { if (!lastD || parts[1] > lastD) { lastD = parts[1]; lastF = state.daily[k]; } return; }
+      sums[parts[2]] = (sums[parts[2]] || 0) + state.daily[k]; any = true;
+    });
+    if (m === "followers") return lastF;
+    if (!any) return null;
+    if (m === "engagements" && sums.engagements == null) {
+      var parts2 = ["likes", "comments", "shares", "saves"].filter(function (x) { return sums[x] != null; });
+      return parts2.length ? parts2.reduce(function (s, x) { return s + sums[x]; }, 0) : null;
+    }
+    return sums[m] == null ? null : sums[m];
+  }
+
+  var GOAL_LABEL = { newFollowers: "New followers", followers: "Followers", reach: "Reach", impressions: "Views / impressions", engagements: "Engagements", engRate: "Engagement rate", posts: "Posts" };
+  function renderGoals(W) {
+    var host = $("goals");
+    if (!state.goals.length) { host.innerHTML = ""; return; }
+    var weeks = allWeeks(W), today = todayISO();
+    var items = state.goals.map(function (g) {
+      var ps = g.platform === "all" ? PLATFORMS.map(function (p) { return p.id; }) : [g.platform];
+      var gw = weeks.filter(function (w) { return w >= weekStart(g.start) && w <= g.end; });
+      // Count by day where daily data exists, so the goal's exact dates are respected;
+      // fall back to whole weeks for numbers that only exist weekly (posts exports, manual sheet).
+      function platVal(p, m) {
+        var d = dayValue(p, m, g.start, g.end);
+        if (d != null) return d;
+        return m === "followers" ? lastIn(W, p, gw, m) : sumRange(W, p, gw, m);
+      }
+      var actual;
+      if (g.metric === "engRate") {
+        var e = 0, den = 0;
+        ps.forEach(function (p) {
+          var pe = platVal(p, "engagements"), pd = platVal(p, "reach") || platVal(p, "impressions");
+          if (pe != null && pd) { e += pe; den += pd; }
+        });
+        actual = den ? e / den : null;
+      } else actual = ps.reduce(function (s, p) { var v = platVal(p, g.metric); return v == null ? s : (s || 0) + v; }, null);
+
+      // Pace is measured up to the newest data we have (exports lag a day or two), not up to today.
+      var through = null;
+      Object.keys(state.daily).forEach(function (k) {
+        var parts = k.split("|");
+        if (ps.indexOf(parts[0]) >= 0 && parts[1] <= g.end && (!through || parts[1] > through)) through = parts[1];
+      });
+      var totalDays = daysBetween(g.start, g.end) + 1;
+      var frac = through && through >= g.start ? Math.min(1, (daysBetween(g.start, through) + 1) / totalDays) : 0;
+      var flow = g.metric !== "followers" && g.metric !== "engRate";
+      var expected = flow ? g.target * frac : g.target;
+      var pct = actual == null || !g.target ? 0 : actual / g.target;
+
+      var st;
+      if (today < g.start) st = { cls: "muted", icon: "·", text: "Starts " + shortDate(g.start) };
+      else if (actual == null) st = { cls: "muted", icon: "·", text: "No data yet" };
+      else if (g.metric === "engRate" && today <= g.end) // a rate isn't "reached" until the period is over
+        st = actual >= g.target ? { cls: "good", icon: "✓", text: "On track" } : actual >= g.target * 0.8 ? { cls: "warning", icon: "!", text: "Close" } : { cls: "critical", icon: "!", text: "Behind" };
+      else if (actual >= g.target) st = { cls: "good", icon: "✓", text: "Reached" };
+      else if (today > g.end) st = { cls: "critical", icon: "!", text: "Missed" };
+      else if (g.metric === "followers") st = { cls: "muted", icon: "·", text: "In progress" };
+      else if (actual >= expected) st = { cls: "good", icon: "✓", text: "On track" };
+      else if (actual >= expected * 0.8) st = { cls: "warning", icon: "!", text: "Close" };
+      else st = { cls: "critical", icon: "!", text: "Behind" };
+
+      var f = g.metric === "engRate" ? fmtRate : fmt;
+      var name = g.label || ((g.platform === "all" ? "All platforms" : PNAME[g.platform]) + " · " + GOAL_LABEL[g.metric]);
+      var pace = flow && today >= g.start && today <= g.end && through
+        ? "Pace: " + fmt(expected) + " expected by " + shortDate(through < g.end ? through : g.end) : "";
+      var bar = Math.max(0, Math.min(100, pct * 100));
+      var mark = flow && frac > 0 && frac < 1 ? '<i class="mark" style="left:' + (frac * 100).toFixed(1) + '%" title="Where you should be by now"></i>' : "";
+      return '<div class="goal"><div class="gtop"><div class="gname">' + esc(name) + '</div><span class="gstat" style="--sc:var(--' + st.cls + ')"><b aria-hidden="true">' + st.icon + "</b>" + st.text + "</span></div>" +
+        '<div class="gnum"><b>' + f(actual) + "</b> of " + f(g.target) + ' <span class="gpct">' + (actual == null || g.metric === "engRate" ? "" : Math.round(pct * 100) + "%") + "</span></div>" +
+        '<div class="gbar" role="img" aria-label="' + Math.round(pct * 100) + '% of target"><i style="width:' + bar.toFixed(1) + '%;background:var(--' + (st.cls === "muted" ? "s1" : st.cls) + ')"></i>' + mark + "</div>" +
+        '<div class="gmeta">' + shortDate(g.start) + " – " + longDate(g.end) + (pace ? " · " + pace : "") + "</div></div>";
+    });
+    host.innerHTML = '<section class="card"><h2>Goals</h2><div class="goals">' + items.join("") + "</div></section>";
   }
 
   function renderMain(W, cur) {
