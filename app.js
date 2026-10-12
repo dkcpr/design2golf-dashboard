@@ -604,6 +604,15 @@
     { k: "likes", l: "Likes", n: true }, { k: "comments", l: "Comments", n: true }, { k: "shares", l: "Shares", n: true },
     { k: "engagements", l: "Engagements", n: true }
   ];
+  // LinkedIn personal exports have no post text, but post links carry a slug, e.g.
+  // linkedin.com/posts/matthew-atkins-a3b19830_the-future-of-indoor-golf-ugcPost-745… → "The future of indoor golf".
+  function slugTitle(link) {
+    var m = /linkedin\.com\/posts\/[^_\/]+_(.+?)-(?:share|ugcPost|activity)-\d/.exec(link || "");
+    if (!m) return "";
+    var t = m[1].replace(/-/g, " ").trim();
+    return t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+  }
+
   function renderPosts(cur) {
     $("postFilter").innerHTML = [{ id: "all", name: "All" }].concat(PLATFORMS).map(function (p) { return '<button data-p="' + p.id + '" aria-pressed="' + (p.id === state.postPlatform) + '">' + p.name + "</button>"; }).join("");
     if (!cur.length) { $("posts").innerHTML = '<div class="empty">No posts yet.</div>'; return; }
@@ -619,7 +628,7 @@
       var sortable = c.n || c.k === "date";
       return '<th class="' + (c.n ? "n " : "") + (sortable ? "sortable" : "") + '"' + (sortable ? ' data-sort="' + c.k + '"' : "") + ">" + c.l + (sortable && sk === c.k ? " ▾" : "") + "</th>";
     }).join("") + "</tr></thead><tbody>" + list.map(function (p) {
-      var title = esc(p.title || p.type || (p.link ? "View post" : "(untitled)")); // LinkedIn personal exports have no post text
+      var title = esc(p.title || p.type || slugTitle(p.link) || (p.link ? "View post" : "(untitled)"));
       return "<tr><td>" + shortDate(p.date) + '</td><td><span class="pill" style="--c:' + color(p.platform) + '">' + PNAME[p.platform] + '</span></td><td><div class="post-title">' +
         (p.link && /^https?:/.test(p.link) ? '<a href="' + esc(p.link) + '" target="_blank" rel="noopener">' + title + "</a>" : title) + "</div></td>" +
         POST_COLS.slice(3).map(function (c) { return '<td class="n">' + fmt(p[c.k]) + "</td>"; }).join("") + "</tr>";
