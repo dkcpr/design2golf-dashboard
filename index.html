@@ -65,7 +65,19 @@ h2 { font-size: 15px; margin: 0 0 12px; }
 .btn:hover { border-color: var(--axis); }
 
 .fresh { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
-.fresh .item { display: flex; gap: 8px; align-items: center; padding: 10px 12px; }
+.fresh .item { display: flex; gap: 8px; align-items: center; padding: 10px 12px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.fresh .item:hover { border-color: var(--axis); }
+.fresh .item.active { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+
+.range { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.range select, .range input { border: 1px solid var(--border); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 5px 8px; font: inherit; }
+.range select { padding-right: 4px; }
+
+.tabs { position: relative; display: flex; gap: 4px; border-bottom: 1px solid var(--grid); margin-bottom: 16px; overflow-x: auto; scrollbar-width: none; }
+.tabs button { border: 0; background: none; color: var(--ink-2); font: inherit; font-weight: 600; padding: 10px 12px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button:hover { color: var(--ink); }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--c, var(--ink)); }
+.tabs button i { width: 9px; height: 9px; border-radius: 3px; background: var(--c); }
 .fresh .icon { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; flex: none; }
 .fresh .name { font-weight: 600; }
 .fresh .when { color: var(--ink-2); font-size: 12px; }
@@ -152,15 +164,17 @@ dialog .controls { margin-top: 12px; }
       <div class="sub" id="subtitle">Loading data…</div>
     </div>
     <div class="controls">
-      <div class="seg" id="range" role="group" aria-label="Date range">
-        <button data-w="4" aria-pressed="false">4 wks</button>
-        <button data-w="12" aria-pressed="true">12 wks</button>
-        <button data-w="26" aria-pressed="false">26 wks</button>
-        <button data-w="0" aria-pressed="false">All</button>
+      <div class="range" role="group" aria-label="Date range">
+        <select id="preset" aria-label="Date range"></select>
+        <input type="date" id="from" aria-label="From">
+        <span aria-hidden="true">–</span>
+        <input type="date" id="to" aria-label="To">
       </div>
-      <button class="btn" id="csvBtn" title="Download the weekly numbers as a spreadsheet">Download CSV</button>
+      <button class="btn" id="csvBtn" title="Download the weekly numbers for this tab and date range as a spreadsheet">Download CSV</button>
     </div>
   </header>
+
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Account"></nav>
 
   <div class="fresh" id="fresh"></div>
   <div id="warnings"></div>
@@ -193,7 +207,7 @@ dialog .controls { margin-top: 12px; }
     </details>
   </section>
 
-  <p class="note">Weeks run Monday–Sunday. Engagements are likes/reactions + comments + shares/reposts + saves unless the platform export reports a total. Engagement rate = engagements ÷ reach (or ÷ impressions/views when reach isn't available).
+  <p class="note">Ranges of two months or less chart day by day; longer ranges chart by week (Monday–Sunday). "Last N days" ends on the newest day of uploaded data. Changes are compared with the same number of days just before, when the data covers it. Engagements are likes/reactions + comments + shares/reposts + saves unless the platform export reports a total. Engagement rate = engagements ÷ reach (or ÷ impressions/views when reach isn't available).
   Tip: drag export files onto this page to preview them before uploading.</p>
 </div>
 

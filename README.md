@@ -4,7 +4,7 @@ A web page that turns the export files from Matt's Instagram (@mattatkins_d2g), 
 
 Live dashboard: **https://dkcpr.github.io/design2golf-dashboard/**
 
-## Weekly routine (about 15 minutes)
+## Monthly routine (about 15 minutes, first Wednesday of the month)
 
 ### 1. Download the exports
 
@@ -34,7 +34,7 @@ Open the platform's folder upload page, drag the files in, and click the green *
 
 ### 4. Check
 
-Wait about 5 minutes, then reload the dashboard. If anything looks stale, press Cmd+Shift+R. Each platform's status box turns green when its data is current and yellow when it's more than 10 days old. A yellow box at the top lists any file that couldn't be read.
+Wait about 5 minutes, then reload the dashboard. If anything looks stale, press Cmd+Shift+R. Each platform's status box turns green when its data is current and yellow when it's more than 35 days old. A yellow box at the top lists any file that couldn't be read.
 
 Not sure a file will work? Drag it onto the dashboard page first. It previews the file in your browser without uploading anything.
 
@@ -66,6 +66,13 @@ start,end,platform,metric,target,label
 - `label`: optional; the name shown on the dashboard
 
 Each goal shows progress against its target, with a marker for where you should be by now if you keep a steady pace. **On track** means at or ahead of pace, **Close** means within 20% of it, and **Behind** means further back. Pace is measured up to the newest data uploaded, so upload the week's exports before reading it.
+
+## Tabs and date range
+
+- **Tabs:** *Overview* adds up every account. Each account has its own tab with only its numbers, goals, posts and weekly table. Clicking a status box at the top also opens that account.
+- **Date range:** pick a preset (Last 7 / 28 / 90 days, This month, Last month, This quarter, All time) or type your own From and To dates. "Last N days" ends on the newest day of uploaded data. Ranges of two months or less chart day by day, and longer ones chart by week.
+- **Comparisons** (▲/▼) are against the same number of days just before. They're left out when the exports don't reach back that far.
+- **Sharing a view:** the address bar keeps the tab and range (e.g. `…/design2golf-dashboard/#account=instagram&range=28d`), so that link opens the same view.
 
 ## How the numbers are calculated
 

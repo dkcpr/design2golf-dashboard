@@ -23,13 +23,20 @@
   var FILE_RE = /\.(csv|xlsx|xls)$/i;
   var SUM_METRICS = ["newFollowers", "reach", "impressions", "engagements", "likes", "comments", "shares", "saves", "clicks", "profileVisits"];
   var MAIN_METRICS = [
-    { id: "engagements", label: "Engagements", title: "Weekly engagements by platform" },
-    { id: "reach", label: "Reach", title: "Weekly reach by platform" },
-    { id: "impressions", label: "Views", title: "Weekly impressions / views by platform" },
-    { id: "newFollowers", label: "New followers", title: "Net new followers per week" },
-    { id: "followers", label: "Followers", title: "Total followers at end of week" },
-    { id: "engRate", label: "Eng. rate", title: "Weekly engagement rate by platform", rate: true }
+    { id: "engagements", label: "Engagements", title: "engagements" },
+    { id: "reach", label: "Reach", title: "reach" },
+    { id: "impressions", label: "Views", title: "impressions / views" },
+    { id: "newFollowers", label: "New followers", title: "net new followers" },
+    { id: "followers", label: "Followers", title: "total followers" },
+    { id: "engRate", label: "Eng. rate", title: "engagement rate", rate: true }
   ];
+  // "Last N days" presets end on the newest day of data; calendar presets follow today's calendar.
+  var PRESETS = [
+    { id: "7d", label: "Last 7 days" }, { id: "28d", label: "Last 28 days" }, { id: "90d", label: "Last 90 days" },
+    { id: "mtd", label: "This month" }, { id: "lm", label: "Last month" }, { id: "qtd", label: "This quarter" },
+    { id: "all", label: "All time" }, { id: "custom", label: "Custom dates" }
+  ];
+  var DAILY_MAX_DAYS = 62; // ranges up to this long chart by day, longer ones by week
 
   var state = {
     daily: {},      // "platform|YYYY-MM-DD|metric" -> number
@@ -38,7 +45,9 @@
     goals: [],      // { start, end, platform, metric, target, label } from data/manual/goals.csv
     files: [],      // { path, platform, ok, note }
     previewCount: 0,
-    weeksBack: 12,
+    account: "all", // "all" (overview tab) or a platform id
+    preset: "90d",  // a PRESETS id; "custom" uses from/to as picked
+    from: null, to: null,
     metric: "engagements",
     postPlatform: "all",
     postSort: "engagements"
@@ -415,14 +424,16 @@
     });
   }
 
-  // ---------- rolling up into weeks ----------
-  function buildWeekly() {
-    var W = {}; // platform -> week -> row
+  // ---------- rolling up into weeks (or days) ----------
+  // gran "week" keys rows by the week's Monday, "day" by the date itself.
+  function buildWeekly(gran) {
+    var key = gran === "day" ? function (d) { return d; } : weekStart, step = gran === "day" ? 1 : 7;
+    var W = {}; // platform -> week (or day) -> row
     function row(p, w) { W[p] = W[p] || {}; return (W[p][w] = W[p][w] || { followersDate: null }); }
     var hasDaily = {}; // "platform|metric" -> true when daily exports cover it
     Object.keys(state.daily).forEach(function (k) {
       var parts = k.split("|"), p = parts[0], d = parts[1], m = parts[2], v = state.daily[k];
-      var r = row(p, weekStart(d));
+      var r = row(p, key(d));
       if (m === "followers") { if (!r.followersDate || d > r.followersDate) { r.followers = v; r.followersDate = d; } }
       else r[m] = (r[m] || 0) + v;
     });
@@ -438,7 +449,7 @@
     // Posts: count per week, and stand in for daily totals a platform's exports don't have.
     var fallback = {};
     Object.keys(state.posts).forEach(function (k) {
-      var post = state.posts[k], r = row(post.platform, weekStart(post.date));
+      var post = state.posts[k], r = row(post.platform, key(post.date));
       r.posts = (r.posts || 0) + 1;
       ["engagements", "reach", "impressions"].forEach(function (m) {
         if (post[m] == null || hasDaily[post.platform + "|" + m]) return;
@@ -455,7 +466,7 @@
       var weeks = Object.keys(W[p]).sort();
       weeks.forEach(function (w, i) {
         var r = W[p][w];
-        if (r.newFollowers == null && r.followers != null && i > 0 && W[p][weeks[i - 1]].followers != null && daysBetween(weeks[i - 1], w) === 7)
+        if (r.newFollowers == null && r.followers != null && i > 0 && W[p][weeks[i - 1]].followers != null && daysBetween(weeks[i - 1], w) === step)
           r.newFollowers = r.followers - W[p][weeks[i - 1]].followers;
         var denom = r.reach || r.impressions;
         r.engRate = r.engagements != null && denom ? r.engagements / denom : null;
@@ -464,14 +475,13 @@
     return { W: W, fallback: fallback };
   }
 
+  // Only weeks with real numbers count: a week that just has an old post in it (Matt's LinkedIn export
+  // lists a 2012 post) must not stretch the timeline back years.
+  function hasNumbers(r) { return Object.keys(r).some(function (k) { return k !== "posts" && k !== "followersDate" && r[k] != null; }); }
   function allWeeks(W) {
     var set = {};
-    // Only weeks with real numbers count: a week that just has an old post in it (Matt's LinkedIn export
-    // lists a 2012 post) must not stretch the timeline back years.
     Object.keys(W).forEach(function (p) {
-      Object.keys(W[p]).forEach(function (w) {
-        if (Object.keys(W[p][w]).some(function (k) { return k !== "posts" && k !== "followersDate" && W[p][w][k] != null; })) set[w] = true;
-      });
+      Object.keys(W[p]).forEach(function (w) { if (hasNumbers(W[p][w])) set[w] = true; });
     });
     var ws = Object.keys(set).sort();
     if (!ws.length) return [];
@@ -501,35 +511,167 @@
     return d ? e / d : null;
   }
 
+  // ---------- date ranges ----------
+  // First day of data per platform, and the newest day of data overall (never past yesterday).
+  function dataBounds(W) {
+    var first = {}, last = null, yest = addDays(todayISO(), -1);
+    Object.keys(state.daily).forEach(function (k) {
+      var parts = k.split("|"), p = parts[0], d = parts[1];
+      if (!PNAME[p]) return;
+      if (!first[p] || d < first[p]) first[p] = d;
+      if (d <= yest && (!last || d > last)) last = d;
+    });
+    // Platforms with only posts exports or manual rows: use their weeks.
+    Object.keys(W).forEach(function (p) {
+      if (first[p] || !PNAME[p]) return;
+      Object.keys(W[p]).forEach(function (w) {
+        if (!hasNumbers(W[p][w])) return;
+        if (!first[p] || w < first[p]) first[p] = w;
+        var e = addDays(w, 6); if (e > yest) e = yest;
+        if (!last || e > last) last = e;
+      });
+    });
+    var all = Object.keys(first).map(function (p) { return first[p]; }).sort()[0] || null;
+    return { first: first, firstAll: all, last: last || yest };
+  }
+
+  function resolveRange(b) {
+    var p = state.preset, today = todayISO(), yest = addDays(today, -1), end = b.last;
+    if (p === "custom" && state.from && state.to) return;
+    var f, t = end;
+    var month1 = today.slice(0, 8) + "01";
+    if (/^\d+d$/.test(p)) f = addDays(end, 1 - parseInt(p, 10));
+    else if (p === "mtd") f = month1;
+    else if (p === "lm") { t = addDays(month1, -1); f = t.slice(0, 8) + "01"; }
+    else if (p === "qtd") { var mo = +today.slice(5, 7); f = today.slice(0, 5) + pad(mo - (mo - 1) % 3) + "-01"; }
+    else { state.preset = p === "custom" ? "custom" : "all"; f = b.firstAll || end; }
+    if (t < f) t = f > yest ? f : yest; // calendar range with no data yet: show it empty
+    state.from = f; state.to = t;
+  }
+
+  function bucketsFor(from, to, gran) {
+    var out = [], d = gran === "day" ? from : weekStart(from), stop = gran === "day" ? to : weekStart(to);
+    while (d <= stop) { out.push(d); d = addDays(d, gran === "day" ? 1 : 7); }
+    return out;
+  }
+
+  // Latest follower total on or before a date, from the exports or the manual sheet (manual wins a tie).
+  function followersAt(p, to) {
+    var best = null, bestD = null;
+    Object.keys(state.daily).forEach(function (k) {
+      var parts = k.split("|");
+      if (parts[0] === p && parts[2] === "followers" && parts[1] <= to && (!bestD || parts[1] > bestD)) { bestD = parts[1]; best = state.daily[k]; }
+    });
+    Object.keys(state.manual).forEach(function (k) {
+      var parts = k.split("|");
+      if (parts[0] === p && parts[2] === "followers" && parts[1] <= to && (!bestD || parts[1] >= bestD)) { bestD = parts[1]; best = state.manual[k]; }
+    });
+    return best;
+  }
+
+  // One platform's number for a date range: exact days where daily data exists, whole weeks otherwise
+  // (posts exports, manual sheet). Followers are the latest total by the range's end.
+  function rangeValue(p, m, from, to) {
+    if (m === "followers") return followersAt(p, to);
+    var d = dayValue(p, m, from, to);
+    if (d != null) return d;
+    var ws = model.weeks.filter(function (w) { return w >= weekStart(from) && w <= to; });
+    return sumRange(model.W, p, ws, m);
+  }
+  function rangeTotal(ids, m, from, to) {
+    return ids.reduce(function (s, p) { var v = rangeValue(p, m, from, to); return v == null ? s : (s || 0) + v; }, null);
+  }
+  function rangeRate(ids, from, to) {
+    var e = 0, den = 0;
+    ids.forEach(function (p) {
+      var pe = rangeValue(p, "engagements", from, to), pd = rangeValue(p, "reach", from, to) || rangeValue(p, "impressions", from, to);
+      if (pe != null && pd) { e += pe; den += pd; }
+    });
+    return den ? e / den : null;
+  }
+  // Compare with the period just before only when every platform's data covers all of it.
+  function canCompare(ids) {
+    if (state.preset === "all") return false;
+    var withData = ids.filter(function (p) { return model.first[p]; });
+    return withData.length > 0 && withData.every(function (p) { return model.first[p] <= model.pf; });
+  }
+
+  function activeIds() { return state.account === "all" ? PLATFORMS.map(function (p) { return p.id; }) : [state.account]; }
+
+  // The tab and date range live in the address (#account=instagram&range=28d) so a link opens the same view.
+  function readHash() {
+    var q = new URLSearchParams(location.hash.slice(1));
+    var a = q.get("account"); if (a && PNAME[a]) state.account = a;
+    var r = q.get("range"); if (r && PRESETS.some(function (x) { return x.id === r; })) state.preset = r;
+    var f = q.get("from"), t = q.get("to"), iso = /^\d{4}-\d\d-\d\d$/;
+    if (iso.test(f || "") && iso.test(t || "")) { state.preset = "custom"; state.from = f < t ? f : t; state.to = f < t ? t : f; }
+  }
+  function saveHash() {
+    var q = new URLSearchParams();
+    if (state.account !== "all") q.set("account", state.account);
+    if (state.preset === "custom") { q.set("from", state.from); q.set("to", state.to); }
+    else if (state.preset !== "90d") q.set("range", state.preset);
+    var s = q.toString();
+    history.replaceState(null, "", location.pathname + location.search + (s ? "#" + s : ""));
+  }
+
   // ---------- rendering ----------
   var model = null;
 
   function render() {
-    model = buildWeekly();
-    var W = model.W;
-    var weeks = allWeeks(W);
-    var n = state.weeksBack && state.weeksBack < weeks.length ? state.weeksBack : weeks.length;
-    var cur = weeks.slice(weeks.length - n);
-    var prev = state.weeksBack ? weeks.slice(Math.max(0, weeks.length - 2 * n), weeks.length - n) : [];
-    if (prev.length < n) prev = [];
-    model.weeks = weeks; model.cur = cur; model.prev = prev;
+    var wk = buildWeekly("week");
+    var weeks = allWeeks(wk.W);
+    var b = dataBounds(wk.W);
+    resolveRange(b);
+    var from = state.from, to = state.to, len = daysBetween(from, to) + 1;
+    var gran = len <= DAILY_MAX_DAYS ? "day" : "week";
+    model = {
+      W: wk.W, fallback: wk.fallback, weeks: weeks, first: b.first, last: b.last,
+      B: gran === "day" ? buildWeekly("day").W : wk.W, gran: gran, buckets: bucketsFor(from, to, gran),
+      from: from, to: to, len: len, pt: addDays(from, -1), pf: addDays(from, -len)
+    };
+    var ids = activeIds();
 
     var okFiles = state.files.filter(function (f) { return f.ok && f.platform !== "manual"; }).length;
     $("subtitle").textContent = weeks.length
-      ? "Week of " + longDate(cur[0]) + " – week of " + longDate(cur[cur.length - 1]) + " · " + okFiles + " export files" + (state.previewCount ? " · including " + state.previewCount + " previewed files (not saved)" : "")
+      ? longDate(from) + " – " + longDate(to) + " · newest data " + shortDate(b.last) + " · " + okFiles + " export files" + (state.previewCount ? " · including " + state.previewCount + " previewed files (not saved)" : "")
       : (state.files.length ? "No usable data found in the export files yet." : "No export files yet: upload them to the data folders.");
 
-    renderFresh(W);
+    renderTabs();
+    renderRange(b);
+    renderFresh();
     renderWarnings();
-    renderKpis(W, cur, prev);
-    renderGoals(W);
-    renderMain(W, cur);
-    renderPlatforms(W, cur, prev);
-    renderPosts(cur);
-    renderWeekly(W, cur);
+    renderKpis(ids);
+    renderGoals(model.W);
+    renderMain(ids);
+    renderPlatforms();
+    renderPosts();
+    renderWeekly(ids);
   }
 
-  function renderFresh(W) {
+  function renderTabs() {
+    $("tabs").innerHTML = [{ id: "all", name: "Overview" }].concat(PLATFORMS).map(function (p) {
+      var on = p.id === state.account;
+      return '<button role="tab" data-a="' + p.id + '" aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '"' + (p.id === "all" ? "" : ' style="--c:' + color(p.id) + '"') + ">" + (p.id === "all" ? "" : "<i></i>") + esc(p.name) + "</button>";
+    }).join("");
+    // On a phone the tab bar scrolls sideways: keep the open tab in view.
+    var bar = $("tabs"), on = bar.querySelector('[aria-selected="true"]');
+    if (on && on.offsetLeft + on.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = on.offsetLeft + on.offsetWidth - bar.clientWidth + 16;
+  }
+
+  function renderRange(b) {
+    var sel = $("preset");
+    if (!sel.options.length) sel.innerHTML = PRESETS.map(function (p) { return '<option value="' + p.id + '">' + p.label + "</option>"; }).join("");
+    sel.value = state.preset;
+    ["from", "to"].forEach(function (id) {
+      var inp = $(id);
+      inp.value = state[id];
+      if (b.firstAll) inp.min = b.firstAll;
+      inp.max = addDays(todayISO(), -1);
+    });
+  }
+
+  function renderFresh() {
     var today = todayISO(), stale = CFG.staleAfterDays || 10;
     $("fresh").innerHTML = PLATFORMS.map(function (p) {
       var latest = null;
@@ -545,7 +687,7 @@
       else if (!latest) { cls = "critical"; icon = "!"; label = "No data yet"; }
       else if (daysBetween(latest, today) > stale) { cls = "warning"; icon = "!"; label = "Out of date · through " + shortDate(latest); }
       else { cls = "good"; icon = "✓"; label = "Up to date · through " + shortDate(latest); }
-      return '<div class="card item"><span class="icon" style="background:var(--' + cls + ')" aria-hidden="true">' + icon + '</span><div><div class="name">' + p.name + '</div><div class="when">' + label + (files ? " · " + files + " file" + (files > 1 ? "s" : "") : "") + "</div></div></div>";
+      return '<button class="card item' + (p.id === state.account ? " active" : "") + '" data-a="' + p.id + '" title="Open the ' + esc(p.name) + ' tab"><span class="icon" style="background:var(--' + cls + ')" aria-hidden="true">' + icon + '</span><div><div class="name">' + p.name + '</div><div class="when">' + label + (files ? " · " + files + " file" + (files > 1 ? "s" : "") : "") + "</div></div></button>";
     }).join("");
   }
 
@@ -557,8 +699,8 @@
   }
 
   function deltaHTML(curV, prevV, isRate) {
-    if (curV == null || prevV == null || !state.weeksBack) return '<div class="delta">&nbsp;</div>';
-    var label = "vs prior " + state.weeksBack + " wks";
+    if (curV == null || prevV == null) return '<div class="delta">&nbsp;</div>';
+    var label = "vs prior " + model.len + " days";
     if (isRate) {
       var pts = (curV - prevV) * 100;
       return '<div class="delta ' + (pts > 0 ? "up" : pts < 0 ? "down" : "") + '">' + (pts > 0 ? "▲ " : pts < 0 ? "▼ " : "") + Math.abs(pts).toFixed(1) + " pts " + label + "</div>";
@@ -568,23 +710,25 @@
     return '<div class="delta ' + (pct > 0 ? "up" : pct < 0 ? "down" : "") + '">' + (pct > 0 ? "▲ " : pct < 0 ? "▼ " : "") + Math.abs(pct).toFixed(0) + "% " + label + "</div>";
   }
 
-  function renderKpis(W, cur, prev) {
-    var ids = PLATFORMS.map(function (p) { return p.id; });
-    function total(fn, weeks) { var s = null; ids.forEach(function (p) { var v = fn(p, weeks); if (v != null) s = (s || 0) + v; }); return s; }
-    var fol = total(function (p, w) { return lastIn(W, p, w, "followers"); }, cur);
-    var folPrev = prev.length ? total(function (p, w) { return lastIn(W, p, w, "followers"); }, prev) : null;
+  function renderKpis(ids) {
+    var M = model, cmp = canCompare(ids);
+    function tile(label, m, f, extra) {
+      var t = { label: label, v: rangeTotal(ids, m, M.from, M.to), p: cmp ? rangeTotal(ids, m, M.pf, M.pt) : null, f: f };
+      for (var k in extra) t[k] = extra[k];
+      return t;
+    }
     // Say which platforms the total covers until every platform with data has a follower count.
-    var withData = ids.filter(function (p) { return cur.some(function (w) { return W[p] && W[p][w]; }); });
-    var withTotals = withData.filter(function (p) { return lastIn(W, p, cur, "followers") != null; });
+    var withData = ids.filter(function (p) { return ["newFollowers", "reach", "impressions", "engagements"].some(function (m) { return rangeValue(p, m, M.from, M.to) != null; }); });
+    var withTotals = withData.filter(function (p) { return followersAt(p, M.to) != null; });
     var folNote = withTotals.length && withTotals.length < withData.length
       ? withTotals.map(function (p) { return PNAME[p]; }).join(" + ") + " only" : null;
     var tiles = [
-      { label: "Total followers", v: fol, p: folPrev, f: fmt, note: folNote },
-      { label: "Net new followers", v: total(function (p, w) { return sumRange(W, p, w, "newFollowers"); }, cur), p: prev.length ? total(function (p, w) { return sumRange(W, p, w, "newFollowers"); }, prev) : null, f: function (n) { return n == null ? "–" : (n > 0 ? "+" : "") + fmt(n); } },
-      { label: "Reach", v: total(function (p, w) { return sumRange(W, p, w, "reach"); }, cur), p: prev.length ? total(function (p, w) { return sumRange(W, p, w, "reach"); }, prev) : null, f: fmt },
-      { label: "Impressions / views", v: total(function (p, w) { return sumRange(W, p, w, "impressions"); }, cur), p: prev.length ? total(function (p, w) { return sumRange(W, p, w, "impressions"); }, prev) : null, f: fmt },
-      { label: "Engagements", v: total(function (p, w) { return sumRange(W, p, w, "engagements"); }, cur), p: prev.length ? total(function (p, w) { return sumRange(W, p, w, "engagements"); }, prev) : null, f: fmt },
-      { label: "Engagement rate", v: rateRange(W, ids, cur), p: prev.length ? rateRange(W, ids, prev) : null, f: fmtRate, rate: true }
+      tile("Total followers", "followers", fmt, { note: folNote }),
+      tile("Net new followers", "newFollowers", function (n) { return n == null ? "–" : (n > 0 ? "+" : "") + fmt(n); }),
+      tile("Reach", "reach", fmt),
+      tile("Impressions / views", "impressions", fmt),
+      tile("Engagements", "engagements", fmt),
+      { label: "Engagement rate", v: rangeRate(ids, M.from, M.to), p: cmp ? rangeRate(ids, M.pf, M.pt) : null, f: fmtRate, rate: true }
     ];
     $("kpis").innerHTML = tiles.map(function (t) {
       return '<div class="card kpi"><div class="label">' + t.label + '</div><div class="value">' + t.f(t.v) + "</div>" + (t.note ? '<div class="delta">' + esc(t.note) + "</div>" : deltaHTML(t.v, t.p, t.rate)) + "</div>";
@@ -614,18 +758,15 @@
   var GOAL_LABEL = { newFollowers: "New followers", followers: "Followers", reach: "Reach", impressions: "Views / impressions", engagements: "Engagements", engRate: "Engagement rate", posts: "Posts" };
   function renderGoals(W) {
     var host = $("goals");
-    if (!state.goals.length) { host.innerHTML = ""; return; }
-    var weeks = allWeeks(W), today = todayISO();
-    var items = state.goals.map(function (g) {
+    // Goals have their own dates, so the date range doesn't change them; an account tab shows only its own.
+    var goals = state.goals.filter(function (g) { return state.account === "all" || g.platform === state.account; });
+    if (!goals.length) { host.innerHTML = ""; return; }
+    var today = todayISO();
+    var items = goals.map(function (g) {
       var ps = g.platform === "all" ? PLATFORMS.map(function (p) { return p.id; }) : [g.platform];
-      var gw = weeks.filter(function (w) { return w >= weekStart(g.start) && w <= g.end; });
       // Count by day where daily data exists, so the goal's exact dates are respected;
       // fall back to whole weeks for numbers that only exist weekly (posts exports, manual sheet).
-      function platVal(p, m) {
-        var d = dayValue(p, m, g.start, g.end);
-        if (d != null) return d;
-        return m === "followers" ? lastIn(W, p, gw, m) : sumRange(W, p, gw, m);
-      }
+      function platVal(p, m) { return rangeValue(p, m, g.start, g.end); }
       var actual;
       if (g.metric === "engRate") {
         var e = 0, den = 0;
@@ -674,39 +815,49 @@
     host.innerHTML = '<section class="card"><h2>Goals</h2><div class="goals">' + items.join("") + "</div></section>";
   }
 
-  function renderMain(W, cur) {
+  function bucketTip(w) { return model.gran === "day" ? longDate(w) : "Week of " + longDate(w); }
+
+  function renderMain(ids) {
+    var B = model.B, cur = model.buckets, day = model.gran === "day";
+    // If the chosen metric has nothing for these accounts (YouTube has no engagements), show the first one that does.
+    function has(m) { return ids.some(function (p) { return cur.some(function (w) { return B[p] && B[p][w] && B[p][w][m] != null; }); }); }
+    if (!has(state.metric)) { var alt = MAIN_METRICS.filter(function (m) { return has(m.id); })[0]; if (alt) state.metric = alt.id; }
     var mdef = MAIN_METRICS.filter(function (m) { return m.id === state.metric; })[0];
     $("metric").innerHTML = MAIN_METRICS.map(function (m) { return '<button data-m="' + m.id + '" aria-pressed="' + (m.id === state.metric) + '">' + m.label + "</button>"; }).join("");
-    $("mainTitle").textContent = mdef.title;
-    var series = PLATFORMS.map(function (p) {
-      return { id: p.id, name: p.name, color: color(p.id), values: cur.map(function (w) { var r = W[p.id] && W[p.id][w]; return r && r[mdef.id] != null ? r[mdef.id] : null; }) };
+    var title = mdef.id === "followers" ? "Total followers at end of each " + (day ? "day" : "week") : (day ? "Daily " : "Weekly ") + mdef.title;
+    $("mainTitle").textContent = title + (state.account === "all" ? " by platform" : " · " + PNAME[state.account]);
+    var series = PLATFORMS.filter(function (p) { return ids.indexOf(p.id) >= 0; }).map(function (p) {
+      return { id: p.id, name: p.name, color: color(p.id), values: cur.map(function (w) { var r = B[p.id] && B[p.id][w]; return r && r[mdef.id] != null ? r[mdef.id] : null; }) };
     }).filter(function (s) { return s.values.some(function (v) { return v != null; }); });
     $("legend").innerHTML = series.map(function (s) { return '<span style="--c:' + s.color + '">' + s.name + "</span>"; }).join("");
-    lineChart($("mainChart"), { weeks: cur, series: series, height: 300, format: mdef.rate ? fmtRate : fmt, directLabels: series.length <= 4 });
+    lineChart($("mainChart"), { weeks: cur, series: series, height: 300, format: mdef.rate ? fmtRate : fmt, directLabels: series.length <= 4, tipLabel: bucketTip });
   }
 
-  function renderPlatforms(W, cur, prev) {
-    var el = $("platforms");
+  // Overview only: one small card per platform. An account tab already shows all of this full size.
+  function renderPlatforms() {
+    var el = $("platforms"), M = model, W = M.B, cur = M.buckets;
+    if (state.account !== "all") { el.innerHTML = ""; el.style.display = "none"; return; }
+    el.style.display = "";
     el.innerHTML = PLATFORMS.map(function (p) {
       return '<div class="card plat" style="--c:' + color(p.id) + '"><h3><i></i>' + p.name + '</h3><div class="stats" id="st-' + p.id + '"></div><div class="chart" id="pc-' + p.id + '"></div><div class="cap" id="cap-' + p.id + '"></div></div>';
     }).join("");
     PLATFORMS.forEach(function (p) {
-      var id = p.id;
+      var id = p.id, cmp = canCompare([id]);
+      function st(l, m) { return { l: l, v: rangeValue(id, m, M.from, M.to), pv: cmp ? rangeValue(id, m, M.pf, M.pt) : null, f: fmt }; }
       var stats = [
-        { l: "Followers", v: lastIn(W, id, cur, "followers"), pv: prev.length ? lastIn(W, id, prev, "followers") : null, f: fmt },
-        { l: "Reach", v: sumRange(W, id, cur, "reach"), pv: prev.length ? sumRange(W, id, prev, "reach") : null, f: fmt },
-        { l: "Engagements", v: sumRange(W, id, cur, "engagements"), pv: prev.length ? sumRange(W, id, prev, "engagements") : null, f: fmt },
-        { l: "Eng. rate", v: rateRange(W, [id], cur), pv: prev.length ? rateRange(W, [id], prev) : null, f: fmtRate, rate: true }
+        st("Followers", "followers"), st("Reach", "reach"), st("Engagements", "engagements"),
+        { l: "Eng. rate", v: rangeRate([id], M.from, M.to), pv: cmp ? rangeRate([id], M.pf, M.pt) : null, f: fmtRate, rate: true }
       ];
-      if (stats[1].v == null) { stats[1] = { l: "Views", v: sumRange(W, id, cur, "impressions"), pv: prev.length ? sumRange(W, id, prev, "impressions") : null, f: fmt }; }
+      if (stats[1].v == null) stats[1] = st("Views", "impressions");
       $("st-" + id).innerHTML = stats.map(function (s) {
-        return '<div><div class="l">' + s.l + '</div><div class="v">' + s.f(s.v) + "</div>" + deltaHTML(s.v, s.pv, s.rate).replace('class="delta', 'class="d delta').replace(/ vs prior \d+ wks/, "") + "</div>";
+        return '<div><div class="l">' + s.l + '</div><div class="v">' + s.f(s.v) + "</div>" + deltaHTML(s.v, s.pv, s.rate).replace('class="delta', 'class="d delta').replace(/ vs prior \d+ days/, "") + "</div>";
       }).join("");
       var useTotals = cur.some(function (w) { return W[id] && W[id][w] && W[id][w].followers != null; });
       var metric = useTotals ? "followers" : "newFollowers";
       var vals = cur.map(function (w) { var r = W[id] && W[id][w]; return r && r[metric] != null ? r[metric] : null; });
-      lineChart($("pc-" + id), { empty: "No follower numbers yet. Add the follower export, or weekly totals in the manual sheet.", weeks: cur, series: [{ id: id, name: useTotals ? "Followers" : "New followers", color: color(id), values: vals }], height: 140, format: fmt, compact: true });
-      var notes = [useTotals ? "Followers at end of each week." : "New followers per week."], fromPosts = [];
+      lineChart($("pc-" + id), { empty: "No follower numbers in this range. Add the follower export, or weekly totals in the manual sheet.", weeks: cur, series: [{ id: id, name: useTotals ? "Followers" : "New followers", color: color(id), values: vals }], height: 140, format: fmt, compact: true, tipLabel: bucketTip });
+      var unit = M.gran === "day" ? "day" : "week";
+      var notes = [useTotals ? "Followers at end of each " + unit + "." : "New followers per " + unit + "."], fromPosts = [];
       ["engagements", "reach", "impressions"].forEach(function (m) { if (model.fallback[id + "|" + m]) fromPosts.push(m === "impressions" ? "views" : m); });
       if (fromPosts.length) notes.push("From the posts export (totals for posts published that week): " + fromPosts.join(", ") + ".");
       $("cap-" + id).textContent = notes.join(" ");
@@ -728,12 +879,14 @@
     return t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
   }
 
-  function renderPosts(cur) {
+  function renderPosts() {
+    // On an account tab the platform filter is the tab itself.
+    var only = state.account !== "all" ? state.account : state.postPlatform;
+    $("postFilter").style.display = state.account === "all" ? "" : "none";
     $("postFilter").innerHTML = [{ id: "all", name: "All" }].concat(PLATFORMS).map(function (p) { return '<button data-p="' + p.id + '" aria-pressed="' + (p.id === state.postPlatform) + '">' + p.name + "</button>"; }).join("");
-    if (!cur.length) { $("posts").innerHTML = '<div class="empty">No posts yet.</div>'; return; }
-    var from = cur[0], to = addDays(cur[cur.length - 1], 6);
+    var from = model.from, to = model.to;
     var list = Object.keys(state.posts).map(function (k) { return state.posts[k]; }).filter(function (p) {
-      return p.date >= from && p.date <= to && (state.postPlatform === "all" || p.platform === state.postPlatform);
+      return p.date >= from && p.date <= to && (only === "all" || p.platform === only);
     });
     var sk = state.postSort;
     list.sort(function (a, b) { return sk === "date" ? (a.date < b.date ? 1 : -1) : (b[sk] || 0) - (a[sk] || 0); });
@@ -754,15 +907,16 @@
     { k: "followers", l: "Followers" }, { k: "newFollowers", l: "New followers" }, { k: "reach", l: "Reach" },
     { k: "impressions", l: "Views / impressions" }, { k: "engagements", l: "Engagements" }, { k: "engRate", l: "Eng. rate", rate: true }, { k: "posts", l: "Posts" }
   ];
-  function weeklyRows(W, weeks) {
-    var out = [];
-    weeks.slice().reverse().forEach(function (w) {
-      PLATFORMS.forEach(function (p) { var r = W[p.id] && W[p.id][w]; if (r) out.push({ week: w, platform: p, r: r }); });
+  // Every week that overlaps the date range, newest first, for the open tab's platforms.
+  function weeklyRows(ids) {
+    var out = [], weeks = model.weeks.filter(function (w) { return w >= weekStart(model.from) && w <= model.to; });
+    weeks.reverse().forEach(function (w) {
+      PLATFORMS.forEach(function (p) { var r = model.W[p.id] && model.W[p.id][w]; if (r && ids.indexOf(p.id) >= 0) out.push({ week: w, platform: p, r: r }); });
     });
     return out;
   }
-  function renderWeekly(W, cur) {
-    var rows = weeklyRows(W, cur);
+  function renderWeekly(ids) {
+    var rows = weeklyRows(ids);
     $("weekly").innerHTML = rows.length ? "<table><thead><tr><th>Week of</th><th>Platform</th>" + WEEK_COLS.map(function (c) { return '<th class="n">' + c.l + "</th>"; }).join("") + "</tr></thead><tbody>" +
       rows.map(function (x) {
         return "<tr><td>" + longDate(x.week) + '</td><td><span class="pill" style="--c:' + color(x.platform.id) + '">' + x.platform.name + "</span></td>" +
@@ -772,7 +926,7 @@
 
   function downloadCSV() {
     if (!model) return;
-    var rows = weeklyRows(model.W, model.cur);
+    var rows = weeklyRows(activeIds());
     var lines = [["Week of", "Platform"].concat(WEEK_COLS.map(function (c) { return c.l; })).join(",")];
     rows.forEach(function (x) {
       lines.push([x.week, x.platform.name].concat(WEEK_COLS.map(function (c) {
@@ -782,7 +936,8 @@
     var blob = new Blob([lines.join("\n")], { type: "text/csv" });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = CLIENT.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-weekly-" + todayISO() + ".csv";
+    var who = CLIENT + (state.account === "all" ? "" : " " + state.account);
+    a.download = who.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-weekly-" + model.from + "-to-" + model.to + ".csv";
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   }
@@ -871,7 +1026,7 @@
         rows.push({ s: s, v: v });
       });
       rows.sort(function (a, b) { return b.v - a.v; });
-      tip.innerHTML = '<div class="t">Week of ' + longDate(o.weeks[i]) + "</div>" + (rows.length ? rows.map(function (r) {
+      tip.innerHTML = '<div class="t">' + esc(o.tipLabel ? o.tipLabel(o.weeks[i]) : "Week of " + longDate(o.weeks[i])) + "</div>" + (rows.length ? rows.map(function (r) {
         return '<div class="r"><span><span class="sw" style="background:' + r.s.color + '"></span>' + r.s.name + "</span><b>" + o.format(r.v) + "</b></div>";
       }).join("") : '<div class="r">No data</div>');
       tip.style.display = "block";
@@ -889,23 +1044,43 @@
 
   // ---------- controls ----------
   $("tip").style.position = "fixed";
-  $("range").addEventListener("click", function (e) {
-    var b = e.target.closest("button"); if (!b) return;
-    state.weeksBack = +b.dataset.w;
-    [].forEach.call(this.children, function (c) { c.setAttribute("aria-pressed", c === b); });
-    render();
+  function openAccount(e) {
+    var b = e.target.closest("[data-a]"); if (!b || !model) return;
+    state.account = b.dataset.a; saveHash(); render();
+  }
+  $("tabs").addEventListener("click", openAccount);
+  $("fresh").addEventListener("click", openAccount);
+  $("tabs").addEventListener("keydown", function (e) { // arrow keys move between tabs
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    var ids = ["all"].concat(PLATFORMS.map(function (p) { return p.id; }));
+    var i = (ids.indexOf(state.account) + (e.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length;
+    state.account = ids[i]; saveHash(); render();
+    var t = this.querySelector('[data-a="' + ids[i] + '"]'); if (t) t.focus();
+  });
+  $("preset").addEventListener("change", function () {
+    state.preset = this.value;
+    if (state.preset !== "custom") state.from = state.to = null;
+    saveHash(); render();
+  });
+  ["from", "to"].forEach(function (id) {
+    $(id).addEventListener("change", function () {
+      if (!/^\d{4}-\d\d-\d\d$/.test(this.value)) return;
+      state[id] = this.value;
+      if (state.from > state.to) { var t = state.from; state.from = state.to; state.to = t; }
+      state.preset = "custom"; saveHash(); render();
+    });
   });
   $("metric").addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b) return;
-    state.metric = b.dataset.m; renderMain(model.W, model.cur);
+    state.metric = b.dataset.m; renderMain(activeIds());
   });
   $("postFilter").addEventListener("click", function (e) {
     var b = e.target.closest("button"); if (!b) return;
-    state.postPlatform = b.dataset.p; renderPosts(model.cur);
+    state.postPlatform = b.dataset.p; renderPosts();
   });
   $("posts").addEventListener("click", function (e) {
     var th = e.target.closest("th[data-sort]"); if (!th) return;
-    state.postSort = th.dataset.sort; renderPosts(model.cur);
+    state.postSort = th.dataset.sort; renderPosts();
   });
   $("csvBtn").addEventListener("click", downloadCSV);
   var rt;
@@ -940,5 +1115,6 @@
     dlg.showModal();
   });
 
+  readHash();
   load();
 })();
