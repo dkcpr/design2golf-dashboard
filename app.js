@@ -678,8 +678,9 @@
       var latest = null;
       Object.keys(state.daily).forEach(function (k) { if (k.indexOf(p.id + "|") === 0) { var d = k.split("|")[1]; if (!latest || d > latest) latest = d; } });
       // A manual weekly row counts as data through the end of its week, but never past yesterday.
+      // A follower total is a snapshot, not a week of data, so it doesn't move this date.
       var yesterday = addDays(today, -1);
-      Object.keys(state.manual).forEach(function (k) { if (k.indexOf(p.id + "|") === 0) { var d = addDays(k.split("|")[1], 6); if (d > yesterday) d = yesterday; if (!latest || d > latest) latest = d; } });
+      Object.keys(state.manual).forEach(function (k) { var parts = k.split("|"); if (parts[0] === p.id && parts[2] !== "followers") { var d = addDays(parts[1], 6); if (d > yesterday) d = yesterday; if (!latest || d > latest) latest = d; } });
       var latestPost = null;
       Object.keys(state.posts).forEach(function (k) { var po = state.posts[k]; if (po.platform === p.id && (!latestPost || po.date > latestPost)) latestPost = po.date; });
       var files = state.files.filter(function (f) { return f.platform === p.id && f.ok; }).length;
