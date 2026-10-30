@@ -69,6 +69,15 @@ h2 { font-size: 15px; margin: 0 0 12px; }
 .fresh .item:hover { border-color: var(--axis); }
 .fresh .item.active { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 
+.key { margin-bottom: 16px; }
+.key summary { font-weight: 600; }
+.keygrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 32px; margin-top: 12px; }
+.key h3 { font-size: 13px; margin: 8px 0 6px; color: var(--ink); }
+.key dl { display: grid; grid-template-columns: 9.5em 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
+.key dt { font-weight: 600; color: var(--ink); }
+.key dd { margin: 0; color: var(--ink-2); }
+.kdot { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; color: #fff; font-size: 10px; margin-right: 4px; vertical-align: -2px; }
+@media (max-width: 700px) { .keygrid { grid-template-columns: 1fr; } .key dl { grid-template-columns: 7.5em 1fr; } }
 .range { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .range select, .range input { border: 1px solid var(--border); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 5px 8px; font: inherit; }
 .range select { padding-right: 4px; }
@@ -176,6 +185,51 @@ dialog .controls { margin-top: 12px; }
   </header>
 
   <nav class="tabs" id="tabs" role="tablist" aria-label="Account"></nav>
+
+  <details class="card key" id="key">
+    <summary>How to read this dashboard</summary>
+    <div class="keygrid">
+      <section>
+        <h3>Getting around</h3>
+        <dl>
+          <dt>Tabs</dt><dd><b>Overview</b> adds up every account. Each account tab shows only that account.</dd>
+          <dt>Date range</dt><dd>Pick a preset or type your own dates. "Last 28 days" ends on the newest day of data, not today.</dd>
+          <dt>Status boxes</dt><dd>✓ green means the data is recent. The date is the last day of data we have. Click a box to open that account.</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>The numbers</h3>
+        <dl>
+          <dt>Total followers</dt><dd>Followers on the profile at the end of the range.</dd>
+          <dt>New followers</dt><dd>Followers gained in the range.</dd>
+          <dt>Reach</dt><dd>People who saw the content. Counted per day, so someone who saw posts on 3 days counts 3 times.</dd>
+          <dt>Views</dt><dd>How many times the content was shown, including repeat views.</dd>
+          <dt>Engagements</dt><dd>Likes, comments, shares and saves added together.</dd>
+          <dt>Engagement rate</dt><dd>Engagements ÷ reach: of the people who saw the content, how many interacted. 5% is our goal.</dd>
+          <dt>▲ ▼ arrows</dt><dd>Change compared with the same number of days just before. Missing when there's no earlier data to compare.</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>Goals</h3>
+        <dl>
+          <dt>Bar</dt><dd>How much of the goal is done. The <b>black line</b> marks where you'd be today if progress were spread evenly over the quarter.</dd>
+          <dt><span class="kdot" style="background:var(--good)">✓</span> On track</dt><dd>At or ahead of that line.</dd>
+          <dt><span class="kdot" style="background:var(--warning)">!</span> Close</dt><dd>A little behind the line (within 20%).</dd>
+          <dt><span class="kdot" style="background:var(--critical)">!</span> Behind</dt><dd>More than 20% behind the line.</dd>
+          <dt>In progress</dt><dd>Follower-total goals (e.g. 800 followers) have no daily pace; this shows how far there is to go.</dd>
+        </dl>
+      </section>
+      <section>
+        <h3>Good to know</h3>
+        <dl>
+          <dt>Charts</dt><dd>Two months or less shows each day; longer ranges show each week (Mon–Sun). Hover a line for exact numbers.</dd>
+          <dt>YouTube</dt><dd>Reports views and subscribers only, so reach and engagement show "–".</dd>
+          <dt>Matt's LinkedIn</dt><dd>Updates when Matt sends his LinkedIn export; only he can download it.</dd>
+          <dt>Instagram views</dt><dd>Meta's export includes a small share (~8%) of Design2Golf Facebook page views.</dd>
+        </dl>
+      </section>
+    </div>
+  </details>
 
   <div class="fresh" id="fresh"></div>
   <div id="warnings"></div>
