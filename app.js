@@ -759,8 +759,11 @@
   var GOAL_LABEL = { newFollowers: "New followers", followers: "Followers", reach: "Reach", impressions: "Views / impressions", engagements: "Engagements", engRate: "Engagement rate", posts: "Posts" };
   function renderGoals(W) {
     var host = $("goals");
-    // Goals have their own dates, so the date range doesn't change them; an account tab shows only its own.
-    var goals = state.goals.filter(function (g) { return state.account === "all" || g.platform === state.account; });
+    // Goals have their own dates, so the date range doesn't change them. An account tab shows its own goals,
+    // then the all-accounts goals with that account's share.
+    var acct = state.account;
+    var goals = state.goals.filter(function (g) { return acct === "all" || g.platform === acct || g.platform === "all"; });
+    if (acct !== "all") goals.sort(function (a, b) { return (a.platform === "all") - (b.platform === "all"); });
     if (!goals.length) { host.innerHTML = ""; return; }
     var today = todayISO();
     var items = goals.map(function (g) {
@@ -777,6 +780,17 @@
         });
         actual = den ? e / den : null;
       } else actual = ps.reduce(function (s, p) { var v = platVal(p, g.metric); return v == null ? s : (s || 0) + v; }, null);
+      // On an account tab, what this account adds to a shared goal (or, for a rate, its own rate).
+      var share = "";
+      if (acct !== "all" && g.platform === "all") {
+        if (g.metric === "engRate") {
+          var ae = platVal(acct, "engagements"), ad = platVal(acct, "reach") || platVal(acct, "impressions");
+          share = ae != null && ad ? PNAME[acct] + " on its own: " + fmtRate(ae / ad) : PNAME[acct] + " has no engagement rate yet";
+        } else {
+          var av = platVal(acct, g.metric);
+          share = PNAME[acct] + ": " + fmt(av == null ? 0 : av) + " of the " + fmt(actual == null ? 0 : actual);
+        }
+      }
 
       // Pace is measured up to the newest data we have (exports lag a day or two), not up to today.
       var through = null;
@@ -803,7 +817,7 @@
       else st = { cls: "critical", icon: "!", text: "Behind" };
 
       var f = g.metric === "engRate" ? fmtRate : fmt;
-      var name = g.label || ((g.platform === "all" ? "All platforms" : PNAME[g.platform]) + " · " + GOAL_LABEL[g.metric]);
+      var name = g.label || ((g.platform === "all" ? "All accounts" : PNAME[g.platform]) + " · " + GOAL_LABEL[g.metric]);
       var pace = flow && today >= g.start && today <= g.end && through
         ? "Pace: " + fmt(expected) + " expected by " + shortDate(through < g.end ? through : g.end) : "";
       var bar = Math.max(0, Math.min(100, pct * 100));
@@ -811,7 +825,8 @@
       return '<div class="goal"><div class="gtop"><div class="gname">' + esc(name) + '</div><span class="gstat" style="--sc:var(--' + st.cls + ')"><b aria-hidden="true">' + st.icon + "</b>" + st.text + "</span></div>" +
         '<div class="gnum"><b>' + f(actual) + "</b> of " + f(g.target) + ' <span class="gpct">' + (actual == null || g.metric === "engRate" ? "" : Math.round(pct * 100) + "%") + "</span></div>" +
         '<div class="gbar" role="img" aria-label="' + Math.round(pct * 100) + '% of target"><i style="width:' + bar.toFixed(1) + '%;background:var(--' + (st.cls === "muted" ? "s1" : st.cls) + ')"></i>' + mark + "</div>" +
-        '<div class="gmeta">' + shortDate(g.start) + " – " + longDate(g.end) + (pace ? " · " + pace : "") + "</div></div>";
+        '<div class="gmeta">' + shortDate(g.start) + " – " + longDate(g.end) + (pace ? " · " + pace : "") + "</div>" +
+        (share ? '<div class="gmeta gshare">' + esc(share) + "</div>" : "") + "</div>";
     });
     host.innerHTML = '<section class="card"><h2>Goals</h2><div class="goals">' + items.join("") + "</div></section>";
   }
