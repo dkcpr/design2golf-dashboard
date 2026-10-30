@@ -656,7 +656,8 @@
     }).join("");
     // On a phone the tab bar scrolls sideways: keep the open tab in view.
     var bar = $("tabs"), on = bar.querySelector('[aria-selected="true"]');
-    if (on && on.offsetLeft + on.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = on.offsetLeft + on.offsetWidth - bar.clientWidth + 16;
+    if (on && on.offsetLeft < bar.scrollLeft) bar.scrollLeft = on.offsetLeft;
+    else if (on && on.offsetLeft + on.offsetWidth > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = on.offsetLeft + on.offsetWidth - bar.clientWidth + 16;
   }
 
   function renderRange(b) {
