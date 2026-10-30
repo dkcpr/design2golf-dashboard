@@ -3,3 +3,5 @@ start,end,platform,metric,target,label
 2026-10-01,2026-12-31,instagram,engagements,1500,
 2026-10-01,2026-12-31,linkedin-personal,followers,800,Matt's LinkedIn to 800 followers
 2026-10-01,2026-12-31,all,engagement_rate,5%,
+2026-10-01,2026-12-31,linkedin,new_followers,50,LinkedIn business +50 followers
+2026-10-01,2026-12-31,youtube,views,1500,"YouTube 1,500 views"
