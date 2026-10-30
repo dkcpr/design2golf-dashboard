@@ -756,7 +756,7 @@
     return sums[m] == null ? null : sums[m];
   }
 
-  var GOAL_LABEL = { newFollowers: "New followers", followers: "Followers", reach: "Reach", impressions: "Views / impressions", engagements: "Engagements", engRate: "Engagement rate", posts: "Posts" };
+  var GOAL_LABEL = { newFollowers: "New followers", followers: "Followers", reach: "Reach", impressions: "Views", engagements: "Engagements", engRate: "Engagement rate", posts: "Posts" };
   function renderGoals(W) {
     var host = $("goals");
     // Goals have their own dates, so the date range doesn't change them. An account tab shows its own goals,
@@ -788,7 +788,7 @@
           share = ae != null && ad ? PNAME[acct] + " on its own: " + fmtRate(ae / ad) : PNAME[acct] + " has no engagement rate yet";
         } else {
           var av = platVal(acct, g.metric);
-          share = PNAME[acct] + ": " + fmt(av == null ? 0 : av) + " of the " + fmt(actual == null ? 0 : actual);
+          share = PNAME[acct] + " brought in " + fmt(av == null ? 0 : av) + " of these " + fmt(actual == null ? 0 : actual) + ".";
         }
       }
 
@@ -817,18 +817,33 @@
       else st = { cls: "critical", icon: "!", text: "Behind" };
 
       var f = g.metric === "engRate" ? fmtRate : fmt;
-      var name = g.label || ((g.platform === "all" ? "All accounts" : PNAME[g.platform]) + " · " + GOAL_LABEL[g.metric]);
-      var pace = flow && today >= g.start && today <= g.end && through
-        ? "Pace: " + fmt(expected) + " expected by " + shortDate(through < g.end ? through : g.end) : "";
+      var name = g.label || ((g.platform === "all" ? "All accounts" : PNAME[g.platform]) + ": " + GOAL_LABEL[g.metric].toLowerCase());
+      // One plain sentence: where you should be by now, and what it takes from here.
+      var plain = "";
+      if (actual != null && today >= g.start && today <= g.end && through) {
+        var by = shortDate(through < g.end ? through : g.end), daysLeft = daysBetween(through, g.end);
+        if (g.metric === "engRate") plain = "Goal is " + fmtRate(g.target) + " or better. " + (actual >= g.target ? "You're above it." : "You're " + ((g.target - actual) * 100).toFixed(1) + " points below it.");
+        else if (actual >= g.target) plain = "Goal reached.";
+        else if (!flow) plain = fmt(g.target - actual) + " to go by " + shortDate(g.end) + ".";
+        else {
+          var gap = Math.round(actual - expected);
+          plain = "To be on pace by " + by + ": " + fmt(expected) + ". " + (gap >= 0 ? "You're " + fmt(gap) + " ahead." : "You're " + fmt(-gap) + " short.");
+          if (daysLeft > 0) plain += " Needs about " + fmt(Math.ceil((g.target - actual) / daysLeft * 30)) + " a month from here.";
+        }
+      }
       var bar = Math.max(0, Math.min(100, pct * 100));
       var mark = flow && frac > 0 && frac < 1 ? '<i class="mark" style="left:' + (frac * 100).toFixed(1) + '%" title="Where you should be by now"></i>' : "";
       return '<div class="goal"><div class="gtop"><div class="gname">' + esc(name) + '</div><span class="gstat" style="--sc:var(--' + st.cls + ')"><b aria-hidden="true">' + st.icon + "</b>" + st.text + "</span></div>" +
         '<div class="gnum"><b>' + f(actual) + "</b> of " + f(g.target) + ' <span class="gpct">' + (actual == null || g.metric === "engRate" ? "" : Math.round(pct * 100) + "%") + "</span></div>" +
         '<div class="gbar" role="img" aria-label="' + Math.round(pct * 100) + '% of target"><i style="width:' + bar.toFixed(1) + '%;background:var(--' + (st.cls === "muted" ? "s1" : st.cls) + ')"></i>' + mark + "</div>" +
-        '<div class="gmeta">' + shortDate(g.start) + " – " + longDate(g.end) + (pace ? " · " + pace : "") + "</div>" +
-        (share ? '<div class="gmeta gshare">' + esc(share) + "</div>" : "") + "</div>";
+        (plain ? '<div class="gplain">' + esc(plain) + "</div>" : "") +
+        (share ? '<div class="gmeta">' + esc(share) + "</div>" : "") + "</div>";
     });
-    host.innerHTML = '<section class="card"><h2>Goals</h2><div class="goals">' + items.join("") + "</div></section>";
+    // Goals share one period in practice; say how they're counted once, above the cards.
+    var q = goals[0], newest = Object.keys(state.daily).reduce(function (m, k) { var d = k.split("|")[1]; return d > m ? d : m; }, "");
+    var how = "Counted from " + shortDate(q.start) + " to the newest data" + (newest ? " (" + shortDate(newest) + ")" : "") + ". " +
+      "“On pace” spreads each goal evenly over " + shortDate(q.start) + " – " + shortDate(q.end) + "; the black line on a bar marks where you should be today.";
+    host.innerHTML = '<section class="card"><h2>Goals</h2><p class="note" style="margin:-6px 0 14px">' + esc(how) + '</p><div class="goals">' + items.join("") + "</div></section>";
   }
 
   function bucketTip(w) { return model.gran === "day" ? longDate(w) : "Week of " + longDate(w); }
