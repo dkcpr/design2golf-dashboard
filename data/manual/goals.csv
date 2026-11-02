@@ -6,3 +6,7 @@ start,end,platform,metric,target,label
 2026-10-01,2026-12-31,linkedin,new_followers,50,
 2026-10-01,2026-12-31,youtube,views,1500,
 2026-10-01,2026-12-31,instagram,new_followers,60,
+2026-10-01,2026-12-31,instagram,posts_per_month,6,
+2026-10-01,2026-12-31,linkedin,posts_per_month,4,
+2026-10-01,2026-12-31,linkedin-personal,posts_per_month,4,
+2026-10-01,2026-12-31,youtube,posts_per_month,4,
