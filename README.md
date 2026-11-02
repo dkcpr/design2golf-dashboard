@@ -13,6 +13,7 @@ Pick the longest date range each time. Overlapping dates are fine.
 | Platform | Where | Files |
 |---|---|---|
 | **Instagram (Matt)** | business.facebook.com/latest/insights/results → platform box: **@mattatkins_d2g** → date: **Last 90 days** → **Export → CSV** on each card | Views, Viewers, Follows, Visits, Interactions, Link clicks (6 CSVs) |
+| **Instagram posts** | business.facebook.com/latest/insights/content → **Export data** → **Instagram** tab → account **mattatkins_d2g** → **Post** → **Generate** → **Download export** | One CSV with a row per post (feeds the posts-per-month count and top posts) |
 | **LinkedIn (business)** | Design2Golf company page, admin view → **Analytics → Content → Export**, then **Analytics → Followers → Export** | `…_content_….xls` and `…_followers_….xls` |
 | **LinkedIn (Matt)** | Signed in as Matt: **linkedin.com/analytics/creator/content** → longest range → **Export** | One Excel file (it has Engagement, Followers and Top posts sheets) |
 | **YouTube** | **studio.youtube.com → Analytics → Overview → See more** (opens Advanced mode) → longest range → **download arrow (↓) → Comma-separated values (.csv)** | A folder of three files. Upload `Totals.csv` (daily views for the whole channel) and `Table data.csv` (one row per video). Skip `Chart data.csv`: it only covers the videos highlighted in the chart. |
@@ -62,7 +63,7 @@ start,end,platform,metric,target,label
 ```
 
 - `platform`: `all`, `instagram`, `linkedin`, `linkedin-personal` or `youtube`
-- `metric`: `new_followers`, `followers` (a total to reach), `reach`, `views`, `engagements`, `engagement_rate` (write it as `5%`) or `posts`
+- `metric`: `new_followers`, `followers` (a total to reach), `reach`, `views`, `engagements`, `engagement_rate` (write it as `5%`), `posts`, or `posts_per_month` (a target for every month from start to end, shown in the **Posts per month** table rather than as a goal card)
 - `label`: optional; the name shown on the dashboard
 
 Each goal shows progress against its target, with a marker for where you should be by now if you keep a steady pace. **On track** means at or ahead of pace, **Close** means within 20% of it, and **Behind** means further back. Pace is measured up to the newest data uploaded, so upload the week's exports before reading it.

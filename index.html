@@ -109,6 +109,15 @@ h2 { font-size: 15px; margin: 0 0 12px; }
 .goal .gbar i.mark { width: 2px; background: var(--ink) !important; top: -3px; bottom: -3px; border-radius: 1px; }
 .goal .gmeta { color: var(--muted); font-size: 12px; margin-top: 6px; }
 .goal .gplain { color: var(--ink-2); font-size: 13px; margin-top: 8px; }
+#postsMonthly td b { font-size: 15px; font-weight: 650; }
+#postsMonthly .pm-of { color: var(--muted); font-size: 12px; }
+#postsMonthly .pm-note { display: block; font-size: 11px; color: var(--muted); }
+#postsMonthly .pm-good .pm-note { color: var(--good); font-weight: 600; }
+#postsMonthly .pm-bad .pm-note { color: var(--critical); font-weight: 600; }
+#postsMonthly .pm-none { color: var(--muted); }
+#postsMonthly .pm-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+#postsMonthly td.n, #postsMonthly th.n { white-space: nowrap; }
+@media (max-width: 560px) { #postsMonthly .pm-of { display: none; } } /* the goal column already shows the target */
 #goals section { margin-bottom: 16px; }
 .delta.up { color: var(--up); } .delta.down { color: var(--down); }
 
@@ -217,6 +226,7 @@ dialog .controls { margin-top: 12px; }
           <dt><span class="kdot" style="background:var(--warning)">!</span> Close</dt><dd>A little behind the line (within 20%).</dd>
           <dt><span class="kdot" style="background:var(--critical)">!</span> Behind</dt><dd>More than 20% behind the line.</dd>
           <dt>In progress</dt><dd>Follower-total goals (e.g. 800 followers) have no daily pace; this shows how far there is to go.</dd>
+          <dt>Posts per month</dt><dd>Posts published each calendar month. <b style="color:var(--good)">✓</b> met the goal, <b style="color:var(--critical)">short</b> missed it, "to go" is a month still in progress.</dd>
         </dl>
       </section>
       <section>
@@ -235,6 +245,12 @@ dialog .controls { margin-top: 12px; }
   <div id="warnings"></div>
   <div class="kpis" id="kpis"></div>
   <div id="goals"></div>
+
+  <section class="card">
+    <h2>Posts per month</h2>
+    <p class="note" style="margin:-6px 0 14px">How many posts went out each calendar month, by publish date, against the monthly goal. Instagram counts feed posts and reels (not stories). Matt's LinkedIn only lists his top posts, so it can undercount. "–" means the exports don't cover that month yet.</p>
+    <div class="tablewrap" id="postsMonthly"></div>
+  </section>
 
   <section class="card">
     <div class="chart-head">

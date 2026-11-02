@@ -286,7 +286,8 @@
   // goals.csv: start,end,platform,metric,target,label — platform is a platform id or "all".
   var GOAL_METRICS = {
     "new followers": "newFollowers", "followers": "followers", "reach": "reach", "views": "impressions",
-    "impressions": "impressions", "engagements": "engagements", "engagement rate": "engRate", "posts": "posts"
+    "impressions": "impressions", "engagements": "engagements", "engagement rate": "engRate", "posts": "posts",
+    "posts per month": "postsMonth" // a target for every calendar month from start to end, shown in the posts-per-month table
   };
   function parseGoals(rows, sink) {
     var h = (rows[0] || []).map(norm);
@@ -643,6 +644,7 @@
     renderWarnings();
     renderKpis(ids);
     renderGoals(model.W);
+    renderPostsMonthly();
     renderMain(ids);
     renderPlatforms();
     renderPosts();
@@ -763,7 +765,7 @@
     // Goals have their own dates, so the date range doesn't change them. An account tab shows its own goals,
     // then the all-accounts goals with that account's share.
     var acct = state.account;
-    var goals = state.goals.filter(function (g) { return acct === "all" || g.platform === acct || g.platform === "all"; });
+    var goals = state.goals.filter(function (g) { return g.metric !== "postsMonth" && (acct === "all" || g.platform === acct || g.platform === "all"); });
     if (acct !== "all") goals.sort(function (a, b) { return (a.platform === "all") - (b.platform === "all"); });
     if (!goals.length) { host.innerHTML = ""; return; }
     var today = todayISO();
@@ -845,6 +847,65 @@
     var how = "Counted from " + shortDate(q.start) + " to the newest data" + (newest ? " (" + shortDate(newest) + ")" : "") + ". " +
       "“On pace” spreads each goal evenly over " + shortDate(q.start) + " – " + shortDate(q.end) + "; the black line on a bar marks where you should be today.";
     host.innerHTML = '<section class="card"><h2>Goals</h2><p class="note" style="margin:-6px 0 14px">' + esc(how) + '</p><div class="goals">' + items.join("") + "</div></section>";
+  }
+
+  // Posts per calendar month for each account, against the monthly target in goals.csv (metric posts_per_month).
+  // Months follow the date range (the latest 6 at most). A month the exports don't cover shows "–", not 0.
+  function renderPostsMonthly() {
+    var ids = state.account === "all" ? PLATFORMS.map(function (p) { return p.id; }) : [state.account];
+    var months = [], m = model.from.slice(0, 7);
+    while (m <= model.to.slice(0, 7)) {
+      months.push(m);
+      var y = +m.slice(0, 4), mo = +m.slice(5, 7) + 1;
+      m = (mo > 12 ? y + 1 + "-01" : y + "-" + pad(mo));
+    }
+    months = months.slice(-6);
+    var counts = {}, hasPosts = {};
+    Object.keys(state.posts).forEach(function (k) {
+      var p = state.posts[k], key = p.platform + "|" + p.date.slice(0, 7);
+      counts[key] = (counts[key] || 0) + 1; hasPosts[p.platform] = true;
+    });
+    // What each account's exports cover: first and last day of any data.
+    var span = {};
+    Object.keys(state.daily).concat(Object.keys(state.posts).map(function (k) { var p = state.posts[k]; return p.platform + "|" + p.date; })).forEach(function (k) {
+      var parts = k.split("|"), s = span[parts[0]] || (span[parts[0]] = { first: parts[1], last: parts[1] });
+      if (parts[1] < s.first) s.first = parts[1];
+      if (parts[1] > s.last) s.last = parts[1];
+    });
+    function monthEnd(mm) { var y = +mm.slice(0, 4), mo = +mm.slice(5, 7); return mm + "-" + pad(new Date(y, mo, 0).getDate()); }
+    function target(p, mm) {
+      var g = state.goals.filter(function (g) { return g.metric === "postsMonth" && g.platform === p && g.start <= monthEnd(mm) && g.end >= mm + "-01"; });
+      return g.length ? g[g.length - 1].target : null;
+    }
+    var today = todayISO(), anyGoal = false;
+    var rows = ids.map(function (p) {
+      var s = span[p], goalNow = target(p, months[months.length - 1]);
+      if (goalNow != null) anyGoal = true;
+      var cells = months.map(function (mm) {
+        var t = target(p, mm), n = counts[p + "|" + mm] || 0, end = monthEnd(mm);
+        if (t != null) anyGoal = true;
+        // Not covered: no posts export, the data starts more than a week into the month, or ends before it.
+        if (!hasPosts[p] || !s || s.first > addDays(mm + "-01", 7) || s.last < mm + "-01") return '<td class="n pm-none">–</td>';
+        var partial = s.last < end && today <= addDays(end, 7);
+        var cls = "", note = "";
+        if (t != null) {
+          if (n >= t) { cls = "pm-good"; note = "✓"; }
+          else if (partial) { cls = "pm-part"; note = fmt(t - n) + " to go"; }
+          else { cls = "pm-bad"; note = fmt(t - n) + " short"; }
+        } else if (partial) note = "so far";
+        return '<td class="n ' + cls + '"' + (partial ? ' title="Through ' + shortDate(s.last) + '"' : "") + "><b>" + fmt(n) + "</b>" +
+          (t != null ? '<span class="pm-of"> of ' + fmt(t) + "</span>" : "") + (note ? '<span class="pm-note">' + esc(note) + "</span>" : "") + "</td>";
+      }).join("");
+      return '<tr><td><span class="pill" style="--c:' + color(p) + '">' + esc(PNAME[p]) + "</span>" +
+        (hasPosts[p] ? "" : '<div class="pm-sub">No posts export yet</div>') + "</td>" +
+        '<td class="n">' + (goalNow == null ? "–" : fmt(goalNow)) + "</td>" + cells + "</tr>";
+    });
+    var head = "<tr><th>Account</th><th class=\"n\" title=\"Posts per month\">Goal</th>" + months.map(function (mm) {
+      var d = new Date(+mm.slice(0, 4), +mm.slice(5, 7) - 1, 1);
+      return '<th class="n">' + d.toLocaleDateString("en-US", { month: "short" }) + (mm.slice(0, 4) !== today.slice(0, 4) ? " " + mm.slice(2, 4) : "") + "</th>";
+    }).join("") + "</tr>";
+    $("postsMonthly").innerHTML = "<table><thead>" + head + "</thead><tbody>" + rows.join("") + "</tbody></table>" +
+      (anyGoal ? "" : '<p class="note">Add a <code>posts_per_month</code> row to goals.csv to set a monthly target.</p>');
   }
 
   function bucketTip(w) { return model.gran === "day" ? longDate(w) : "Week of " + longDate(w); }
